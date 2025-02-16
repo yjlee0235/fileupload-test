@@ -1,0 +1,26 @@
+server:
+  port: 8080
+  shutdown: graceful
+
+spring:
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: ${DATABASE_URL}
+    username: ${DATABASE_USERNAME}
+    password: ${DATABASE_PASSWORD}
+
+    hikari:
+      maximum-pool-size: 30
+
+aws:
+  assume-role: ${AWS_S3_UPLOAD_ASSUME_ROLE}
+  s3:
+    bucket-name: ${AWS_S3_BUCKET_NAME}
+
+logging:
+  level:
+    org:
+      springframework:
+        jdbc:
+          core:
+            JdbcTemplate: INFO
