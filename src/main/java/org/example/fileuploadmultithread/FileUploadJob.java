@@ -46,9 +46,9 @@ public class FileUploadJob {
      * execution time
      * 4 threads = 8.237 seconds
      * 10 threads = 3.866 seconds
-     * 30 threads = ? seconds
+     * 30 threads = 6.028 seconds
      */
-    @Scheduled(initialDelay = 10000, fixedDelay = 120000)
+//    @Scheduled(initialDelay = 10000, fixedDelay = 120000)
     public void uploadFilesToS3WithThreadPool() {
         List<FileEntity> fileEntities = fileRepository.findAll();
 
@@ -75,6 +75,15 @@ public class FileUploadJob {
         }
     }
 
+    /**
+     * 100 files upload
+     * t3.micro(ec2) -> S3
+     * execution time
+     * 4 threads = ? seconds
+     * 10 threads = ? seconds
+     * 30 threads = ? seconds
+     */
+//    @Scheduled(initialDelay = 10000, fixedDelay = 120000)
     public void uploadFilesToS3WithComputableFuture() {
         List<FileEntity> fileEntities = fileRepository.findAll();
 
@@ -95,6 +104,34 @@ public class FileUploadJob {
         }
     }
 
-//    public void uploadFilesToS3WithVirtualThreads() {
-//    }
+    /**
+     * 100 files upload
+     * t3.micro(ec2) -> S3
+     * execution time = ? seconds
+     */
+    @Scheduled(initialDelay = 10000, fixedDelay = 120000)
+    public void uploadFilesToS3WithVirtualThreads() {
+        List<FileEntity> fileEntities = fileRepository.findAll();
+
+        try (ExecutorService executorService = Executors.newVirtualThreadPerTaskExecutor()) {
+            CountDownLatch countDownLatch = new CountDownLatch(fileEntities.size());
+
+            long startTimeMillis = System.currentTimeMillis();
+            log.info("[UPLOAD_FILES_THREAD_POOL] start");
+
+            fileEntities.forEach(file ->
+                    executorService.execute(() -> {
+                        fileUploadService.uploadFileToS3(file);
+                        countDownLatch.countDown();
+                    })
+            );
+
+            countDownLatch.await();
+
+            long endTimeMillis = System.currentTimeMillis();
+            log.info("[UPLOAD_FILES_THREAD_POOL] end. execution time = {} ms", endTimeMillis - startTimeMillis);
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        }
+    }
 }
