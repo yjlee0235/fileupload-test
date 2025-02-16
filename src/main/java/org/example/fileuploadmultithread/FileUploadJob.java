@@ -107,9 +107,9 @@ public class FileUploadJob {
     /**
      * 100 files upload
      * t3.micro(ec2) -> S3
-     * execution time = ? seconds
+     * execution time = 4.680 seconds
      */
-    @Scheduled(initialDelay = 10000, fixedDelay = 120000)
+//    @Scheduled(initialDelay = 10000, fixedDelay = 120000)
     public void uploadFilesToS3WithVirtualThreads() {
         List<FileEntity> fileEntities = fileRepository.findAll();
 
@@ -132,6 +132,32 @@ public class FileUploadJob {
             log.info("[UPLOAD_FILES_THREAD_POOL] end. execution time = {} ms", endTimeMillis - startTimeMillis);
         } catch (InterruptedException e) {
             throw new RuntimeException(e);
+        }
+    }
+
+    /**
+     * 100 files upload
+     * t3.micro(ec2) -> S3
+     * execution time = ? seconds
+     */
+    @Scheduled(initialDelay = 10000, fixedDelay = 120000)
+    public void uploadFilesToS3WithVirtualThreadsV2() {
+        List<FileEntity> fileEntities = fileRepository.findAll();
+
+        try (ExecutorService executorService = Executors.newVirtualThreadPerTaskExecutor()) {
+            long startTimeMillis = System.currentTimeMillis();
+            log.info("[UPLOAD_FILES_THREAD_POOL] start");
+
+            List<CompletableFuture<Void>> completableFutures = fileEntities.stream()
+                    .map(file -> CompletableFuture.runAsync(() -> fileUploadService.uploadFileToS3(file), executorService))
+                    .toList();
+
+            CompletableFuture<Void> allFutures = CompletableFuture.allOf(completableFutures.toArray(CompletableFuture[]::new));
+
+            allFutures.join();
+
+            long endTimeMillis = System.currentTimeMillis();
+            log.info("[UPLOAD_FILES_THREAD_POOL] end. execution time = {} ms", endTimeMillis - startTimeMillis);
         }
     }
 }
