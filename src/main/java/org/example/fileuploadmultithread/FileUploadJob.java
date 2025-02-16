@@ -43,13 +43,16 @@ public class FileUploadJob {
     /**
      * 100 files upload
      * t3.micro(ec2) -> S3
-     * execution time = ? seconds
+     * execution time
+     * 4 threads = 8.237 seconds
+     * 10 threads = ? seconds
+     * 30 threads = ? seconds
      */
     @Scheduled(initialDelay = 10000, fixedDelay = 120000)
     public void uploadFilesToS3WithThreadPool() {
         List<FileEntity> fileEntities = fileRepository.findAll();
 
-        try (ExecutorService executorService = Executors.newFixedThreadPool(4)) {
+        try (ExecutorService executorService = Executors.newFixedThreadPool(10)) {
             CountDownLatch countDownLatch = new CountDownLatch(fileEntities.size());
 
             long startTimeMillis = System.currentTimeMillis();
