@@ -9,6 +9,7 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -23,9 +24,10 @@ public class FileUploadJob {
 
     /**
      * 100 files upload
-     * execution time = ? second
+     * t3.micro(ec2) -> S3
+     * execution time = 23.001 seconds
      */
-    @Scheduled(initialDelay = 10000, fixedDelay = 120000)
+//    @Scheduled(initialDelay = 10000, fixedDelay = 120000)
     public void uploadFilesWithSingleThread() {
         List<FileEntity> fileEntities = fileRepository.findAll();
 
@@ -38,21 +40,27 @@ public class FileUploadJob {
         log.info("[UPLOAD_FILES_SINGLE_THREAD] end. execution time = {} ms", endTimeMillis - startTimeMillis);
     }
 
-    //    @Scheduled(fixedDelay = Long.MAX_VALUE)
+    /**
+     * 100 files upload
+     * t3.micro(ec2) -> S3
+     * execution time = ? seconds
+     */
+    @Scheduled(initialDelay = 10000, fixedDelay = 120000)
     public void uploadFilesToS3WithThreadPool() {
         List<FileEntity> fileEntities = fileRepository.findAll();
 
-        try (ExecutorService executorService = Executors.newFixedThreadPool(10)) {
+        try (ExecutorService executorService = Executors.newFixedThreadPool(4)) {
             CountDownLatch countDownLatch = new CountDownLatch(fileEntities.size());
 
             long startTimeMillis = System.currentTimeMillis();
             log.info("[UPLOAD_FILES_THREAD_POOL] start");
 
-            executorService.execute(() ->
-                    fileEntities.forEach(file -> {
-                        fileUploadService.uploadFileToS3(file);
-                        countDownLatch.countDown();
-                    })
+            fileEntities.forEach(file ->
+                    executorService.execute(() -> {
+                                fileUploadService.uploadFileToS3(file);
+                                countDownLatch.countDown();
+                            }
+                    )
             );
 
             countDownLatch.await();
@@ -64,10 +72,26 @@ public class FileUploadJob {
         }
     }
 
-//
-//    public void uploadFilesToS3WithComputableFuture() {
-//    }
-//
+    public void uploadFilesToS3WithComputableFuture() {
+        List<FileEntity> fileEntities = fileRepository.findAll();
+
+        try (ExecutorService executorService = Executors.newFixedThreadPool(10)) {
+            long startTimeMillis = System.currentTimeMillis();
+            log.info("[UPLOAD_FILES_THREAD_POOL] start");
+
+            List<CompletableFuture<Void>> completableFutures = fileEntities.stream()
+                    .map(file -> CompletableFuture.runAsync(() -> fileUploadService.uploadFileToS3(file), executorService))
+                    .toList();
+
+            CompletableFuture<Void> allFutures = CompletableFuture.allOf(completableFutures.toArray(CompletableFuture[]::new));
+
+            allFutures.join();
+
+            long endTimeMillis = System.currentTimeMillis();
+            log.info("[UPLOAD_FILES_THREAD_POOL] end. execution time = {} ms", endTimeMillis - startTimeMillis);
+        }
+    }
+
 //    public void uploadFilesToS3WithVirtualThreads() {
 //    }
 }
